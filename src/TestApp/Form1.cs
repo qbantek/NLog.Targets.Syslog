@@ -19,27 +19,36 @@ namespace TestApp
 
         private void ButtonLog_Click(object sender, EventArgs e)
         {
-            var btn = (Button)sender;
-            switch (btn.Name)
+            try
             {
-                case "buttonTrace":
-                    logger.Trace("This is a sample trace message");
-                    break;
-                case "buttonDebug":
-                    logger.Debug("This is a sample debug message");
-                    break;
-                case "buttonInfo":
-                    logger.Info("This is a sample info message");
-                    break;
-                case "buttonWarn":
-                    logger.Warn("This is a sample warn message");
-                    break;
-                case "buttonError":
-                    logger.Error("This is a sample error message");
-                    break;
-                case "buttonFatal":
-                    logger.Fatal("This is a sample fatal message");
-                    break;
+                
+                var btn = (Button)sender;
+                switch (btn.Name)
+                {
+                    case "buttonTrace":
+                        logger.Trace("This is a sample trace message");
+                        break;
+                    case "buttonDebug":
+                        logger.Debug("This is a sample debug message");
+                        break;
+                    case "buttonInfo":
+                        logger.Info("This is a sample info message");
+                        break;
+                    case "buttonWarn":
+                        logger.Warn("This is a sample warn message");
+                        break;
+                    case "buttonError":
+                        logger.Error("This is a sample error message");
+                        break;
+                    case "buttonFatal":
+                        //logger.Fatal("This is a sample fatal message");
+                        //break;
+                        throw new Exception("Booom!");
+                }
+            }
+            catch (Exception x)
+            {
+                logger.Fatal(x);
             }
         }
     }

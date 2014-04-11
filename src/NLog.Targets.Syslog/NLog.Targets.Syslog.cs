@@ -34,8 +34,8 @@ namespace NLog.Targets
     /// <summary>
     /// This class enables logging to a unix-style syslog server using NLog.
     /// </summary>
-    [NLog.Targets.Target("Syslog")]
-    public class Syslog : NLog.Targets.TargetWithLayout
+    [Target("Syslog")]
+    public class Syslog : TargetWithLayout
     {
         /// <summary>
         /// Sets the IP Address or Host name of your Syslog server
@@ -91,8 +91,18 @@ namespace NLog.Targets
             // Set the current Locale to "en-US" for proper date formatting
             Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
 
-            byte[] message = BuildSyslogMessage(Facility, GetSyslogSeverity(logEvent.Level), DateTime.Now, Sender, Layout.Render(logEvent));
-            SendMessage(SyslogServer, Port, message, Protocol, Ssl);
+            //byte[] message = BuildSyslogMessage(Facility, GetSyslogSeverity(logEvent.Level), DateTime.Now, Sender, Layout.Render(logEvent));
+            //SendMessage(SyslogServer, Port, message, Protocol, Ssl);
+
+            SyslogSeverity level = GetSyslogSeverity(logEvent.Level);
+            var messageBody = Layout.Render(logEvent);
+
+            string[] messageBodyLines = messageBody.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (byte[] message in messageBodyLines.Select(messageBodyLine => BuildSyslogMessage(Facility, level, Sender, messageBodyLine)))
+            {
+                SendMessage(SyslogServer, Port, message, Protocol, Ssl);
+            }
+
 
             // Restore the original culture
             Thread.CurrentThread.CurrentCulture = currentCulture;
@@ -105,6 +115,7 @@ namespace NLog.Targets
         /// <param name="port">The UDP port that syslog is running on</param>
         /// <param name="msg">The syslog formatted message ready to transmit</param>
         /// <param name="protocol">The syslog server protocol (tcp/udp)</param>
+        /// <param name="useSsl"></param>
         private static void SendMessage(string logServer, int port, byte[] msg, ProtocolType protocol, bool useSsl = false)
         {
             var logServerIp = Dns.GetHostAddresses(logServer).FirstOrDefault();
@@ -121,7 +132,7 @@ namespace NLog.Targets
                     break;
                 case ProtocolType.Tcp:
                     var tcp = new TcpClient(ipAddress, port);
-                    Stream stream = tcp.GetStream();
+                    Stream stream;
                     if (useSsl)
                     {
                         var sslStream = new SslStream(tcp.GetStream());
@@ -183,30 +194,33 @@ namespace NLog.Targets
             return SyslogSeverity.Notice;
         }
 
-        /// <summary>
-        /// Builds a syslog-compatible message using the information we have available. 
-        /// </summary>
-        /// <param name="facility">Syslog Facility to transmit message from</param>
-        /// <param name="priority">Syslog severity level</param>
-        /// <param name="time">Time stamp for log message</param>
-        /// <param name="sender">Name of the subsystem sending the message</param>
-        /// <param name="body">Message text</param>
-        /// <returns>Byte array containing formatted syslog message</returns>
-        private byte[] BuildSyslogMessage(SyslogFacility facility, SyslogSeverity priority, DateTime time, string sender, string body)
+        private static byte[] BuildSyslogMessage(SyslogFacility facility, SyslogSeverity level, string sender,
+            string messageBody)
         {
 
-            // Get sender machine name
-            string machine = Dns.GetHostName() + " ";
+            int priority = CalculatePriority(facility, level);
+            string message = string.Format("<{0}>{1} {2} {3}: {4}{5}",
+                priority,
+                DateTime.Now.ToString("MMM dd HH:mm:ss"),
+                Dns.GetHostName(),
+                sender.Substring(0, 32),
+                messageBody,
+                Environment.NewLine);
 
-            // Calculate PRI field
-            int calculatedPriority = (int)facility * 8 + (int)priority;
-            string pri = "<" + calculatedPriority.ToString(CultureInfo.InvariantCulture) + ">";
-
-            string timeToString = time.ToString("MMM dd HH:mm:ss ");
-            sender = sender + ": ";
-
-            string[] strParams = { pri, timeToString, machine, sender, body, Environment.NewLine };
-            return Encoding.ASCII.GetBytes(string.Concat(strParams));
+            return Encoding.ASCII.GetBytes(message);
         }
+
+        /// <summary>
+        /// Calculates the Syslog priority value.
+        /// </summary>
+        /// <param name="facility">The facility.</param>
+        /// <param name="level">The level.</param>
+        /// <returns></returns>
+        private static int CalculatePriority(SyslogFacility facility, SyslogSeverity level)
+        {
+            // Priority = Facility * 8 + Level
+            return (int)facility * 8 + (int)level;
+        }
+
     }
 }
